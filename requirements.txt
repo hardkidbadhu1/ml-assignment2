@@ -1,0 +1,14 @@
+# Pin exactly. Unpickling a scikit-learn Pipeline under a different version than
+# it was fitted on is the single most common Streamlit Cloud failure — it either
+# raises InconsistentVersionWarning or silently mis-predicts.
+#
+# Replace the versions below with the ones `python model/train.py` prints at the
+# end of its run (they come from whatever environment you actually trained in).
+streamlit==1.41.1
+scikit-learn==1.6.1
+pandas==2.2.3
+numpy==2.2.1
+joblib==1.4.2
+matplotlib==3.10.0
+seaborn==0.13.2
+tabulate==0.9.0
