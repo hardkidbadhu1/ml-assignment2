@@ -69,14 +69,42 @@ screenshot as proof. The lab is a provisioned **AWS VM with shell access and ful
 internet**, so the repo runs there unchanged. A screenshot of your own laptop will
 not pass.
 
+The lab image is **Rocky Linux 9.5**, which matters for one reason (below).
+
 `scripts/lab_run.sh` does the whole thing in one command and prints the evidence
 and the result in a single frame:
 
 ```bash
 ssh <user>@<lab-host>
+sudo dnf install -y git python3.12 python3.12-pip   # see "Python version" below
 git clone https://github.com/<user>/<repo>.git && cd <repo>
 bash scripts/lab_run.sh
 ```
+
+### Python version — the one thing that will actually break
+
+Rocky 9 ships **Python 3.9** as the system `python3`. Both pinned libraries need
+newer:
+
+| Package | Pinned | `requires_python` |
+|---|---|---|
+| scikit-learn | 1.7.2 | `>= 3.10` |
+| numpy | 2.2.6 | `>= 3.10` |
+
+On 3.9, `pip install -r requirements.txt` does not fail loudly — it resolves
+*backwards* to whatever old scikit-learn still supports 3.9. You then get
+artifacts that do not match the pins, and Streamlit Cloud unpickles a mismatched
+pipeline. Install 3.12 from AppStream instead — it also matches `runtime.txt`, so
+lab and Streamlit Cloud agree:
+
+```bash
+sudo dnf install -y python3.12 python3.12-pip
+```
+
+The script prefers `python3.12 > python3.11 > python3.10`, refuses to run on
+anything older, and installs into a `.venv` so nothing touches the dnf-managed
+system site-packages. If `python -m venv` is unavailable it falls back to
+`pip install --user` rather than stopping.
 
 It prints hostname, kernel, distro, CPU/RAM, the **EC2 instance id** and the
 library versions; then installs dependencies, trains all six models, runs the 18
