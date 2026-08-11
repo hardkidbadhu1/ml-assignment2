@@ -1332,7 +1332,7 @@
     ],
     "split": "GroupShuffleSplit on player_id",
     "versions": {
-      "python": "3.10.12",
+      "python": "3.12.7",
       "scikit-learn": "1.7.2",
       "pandas": "2.3.3",
       "numpy": "2.2.6",
