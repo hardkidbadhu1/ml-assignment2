@@ -251,10 +251,15 @@ with tab_compare:
             row.update(compute_metrics(y_true, p, pr, mdl.classes_, task, positive_label))
             rows.append(row)
         comparison = pd.DataFrame(rows).set_index("Model")[METRIC_ORDER]
-        st.dataframe(
-            comparison.style.format("{:.4f}").highlight_max(axis=0, color="#c8e6c9"),
-            width="stretch",
-        )
+        try:
+            # pandas' .style accessor is an optional feature gated on jinja2 being
+            # installed. It is pinned in requirements.txt, but a missing transitive
+            # dependency should degrade to an unstyled table rather than take down
+            # the whole tab on Streamlit Cloud.
+            styled = comparison.style.format("{:.4f}").highlight_max(axis=0, color="#c8e6c9")
+        except (ImportError, AttributeError):
+            styled = comparison.round(4)
+        st.dataframe(styled, width="stretch")
         metric_choice = st.selectbox("Chart metric", METRIC_ORDER, index=METRIC_ORDER.index("MCC"))
         st.bar_chart(comparison[metric_choice])
         st.download_button(

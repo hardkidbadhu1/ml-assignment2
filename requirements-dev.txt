@@ -1,0 +1,12 @@
+# Build-time only — deliberately NOT in requirements.txt.
+#
+# Streamlit Cloud installs requirements.txt into the deployed container. WeasyPrint
+# links against system Cairo/Pango/GDK-PixBuf, which are not present there, so
+# putting it in requirements.txt would fail the deploy build for a dependency the
+# running app never imports.
+#
+#   pip install -r requirements-dev.txt
+#   python scripts/make_pdf.py
+weasyprint==69.0
+markdown==3.7
+pdfplumber==0.11.4   # used by scripts/verify-style PDF inspection, optional

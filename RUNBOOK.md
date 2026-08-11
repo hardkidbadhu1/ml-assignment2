@@ -65,12 +65,60 @@ assume a feature encodes the answer. Scan for columns recorded after the outcome
 ## 2. BITS Virtual Lab (1 mark)
 
 The brief requires the assignment to be *performed* on BITS Virtual Lab, with one
-screenshot as proof. Run the training there and screenshot the terminal or
-notebook showing the per-model metrics printing, with the lab chrome visible in
-frame. A screenshot of your own laptop will not pass.
+screenshot as proof. The lab is a provisioned **AWS VM with shell access and full
+internet**, so the repo runs there unchanged. A screenshot of your own laptop will
+not pass.
 
-If the lab environment has an older scikit-learn than your laptop, train there —
-the joblib artifacts must be produced by the same version the app pins.
+`scripts/lab_run.sh` does the whole thing in one command and prints the evidence
+and the result in a single frame:
+
+```bash
+ssh <user>@<lab-host>
+git clone https://github.com/<user>/<repo>.git && cd <repo>
+bash scripts/lab_run.sh
+```
+
+It prints hostname, kernel, distro, CPU/RAM, the **EC2 instance id** and the
+library versions; then installs dependencies, trains all six models, runs the 18
+verification checks, and re-prints the metric table under a
+`RESULTS — trained on <hostname>` banner. Screenshot that window. The instance id
+is stronger evidence than lab chrome in the frame — it is unforgeable from a laptop.
+
+**Getting the dataset there.** `data/*.csv` is gitignored, so a fresh clone will
+not have the 17 MB file and the script will stop with instructions. Easiest is to
+push it from your laptop:
+
+```bash
+scp data/fifa_world_cup_2026_player_performance.csv <user>@<lab-host>:~/<repo>/data/
+```
+
+Or configure the Kaggle CLI on the VM (`pip install kaggle`, drop your API token
+at `~/.kaggle/kaggle.json`, `export KAGGLE_DATASET=<owner>/<slug>`) and re-run.
+
+**If the VM is small.** SVC is superlinear in *n* and is the only thing that
+meaningfully moves runtime — the other five models finish in under two seconds
+combined. On a `t3.micro`-class box:
+
+```bash
+LAB_MAX_ROWS=6000 bash scripts/lab_run.sh
+```
+
+That still clears the 500-instance requirement by 12×. Metrics shift by a few
+thousandths; the model ranking holds.
+
+**Version pinning — decide this deliberately.** The joblib artifacts must be
+produced by the same scikit-learn that `requirements.txt` pins, or Streamlit Cloud
+unpickles a mismatched pipeline and can mis-predict *silently* rather than fail.
+So pick one environment and let it own the artifacts:
+
+- If the lab's scikit-learn differs from your laptop's, **train in the lab**, then
+  copy the version block `train.py` prints into `requirements.txt` and commit the
+  artifacts produced there.
+- Do not train locally, screenshot the lab, and ship the local artifacts — the
+  screenshot would then show numbers that no committed artifact reproduces.
+
+`scripts/verify.py` re-loads every artifact and re-scores it, so run it wherever
+you trained; it will catch the mismatch before Streamlit Cloud does.
 
 ---
 

@@ -51,21 +51,32 @@ def as_string_frame(X: Any) -> pd.DataFrame:
 
 
 def infer_feature_types(
-    X: pd.DataFrame, max_cardinality: int = 50
+    X: pd.DataFrame,
+    max_cardinality: int = 50,
+    force_numeric: tuple[str, ...] | list[str] = (),
 ) -> tuple[list[str], list[str], list[str]]:
     """Split columns into (numeric, categorical, dropped).
 
-    Low-cardinality integer columns are treated as categorical: an integer-coded
+    Low-cardinality integer columns default to categorical: an integer-coded
     `Month` or `Region` is a label, not a quantity, and standardising it would
     invent an ordering that does not exist.
+
+    That default is wrong for *count* columns, where the ordering is real —
+    3 tackles is genuinely more than 1. One-hot encoding a count throws away
+    that ordering, and inflates dimensionality in a way that specifically hurts
+    kNN (Euclidean distance degrades) and GaussianNB (a Gaussian fitted to a
+    0/1 dummy is a poor density model). Pass such columns in `force_numeric`.
     """
     numeric: list[str] = []
     categorical: list[str] = []
     dropped: list[str] = []
+    forced = set(force_numeric)
 
     for col in X.columns:
         s = X[col]
-        if pd.api.types.is_bool_dtype(s):
+        if col in forced and pd.api.types.is_numeric_dtype(s):
+            numeric.append(col)
+        elif pd.api.types.is_bool_dtype(s):
             categorical.append(col)
         elif pd.api.types.is_numeric_dtype(s):
             if pd.api.types.is_integer_dtype(s) and s.nunique(dropna=True) <= 10:

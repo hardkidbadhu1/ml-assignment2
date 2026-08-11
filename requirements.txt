@@ -2,13 +2,21 @@
 # it was fitted on is the single most common Streamlit Cloud failure — it either
 # raises InconsistentVersionWarning or silently mis-predicts.
 #
-# Replace the versions below with the ones `python model/train.py` prints at the
-# end of its run (they come from whatever environment you actually trained in).
+# These are the versions `python model/train.py` reported at the end of the run
+# that produced model/artifacts/. If you retrain in a different environment,
+# re-read that block and update these.
 streamlit==1.41.1
-scikit-learn==1.6.1
-pandas==2.2.3
-numpy==2.2.1
-joblib==1.4.2
+scikit-learn==1.7.2
+pandas==2.3.3
+numpy==2.2.6
+joblib==1.5.3
 matplotlib==3.10.0
 seaborn==0.13.2
+
+# pandas' DataFrame.style accessor is an optional extra gated on jinja2; the
+# "Compare all models" tab uses it for the highlight-best-per-column table.
+# Streamlit does not guarantee it transitively.
+jinja2==3.1.4
+
+# Used by model/train.py to emit reports/metrics.md via DataFrame.to_markdown().
 tabulate==0.9.0
