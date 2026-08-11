@@ -5,7 +5,7 @@
 > file also has to be pasted into the submission PDF (Section 2, item 4).
 
 **Course:** M.Tech (AIML/DSE) — Machine Learning · **Assignment 2**
-**Name / BITS ID:** `<your name>` / `<your ID>`
+**Name / BITS ID:** `Badhmanaban M` / `2025AC05386`
 
 ---
 
