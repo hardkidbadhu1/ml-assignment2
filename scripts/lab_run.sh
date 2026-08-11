@@ -84,6 +84,9 @@ if [[ "$IID" =~ ^i-[0-9a-f]+$ ]]; then
     IAZ="$(curl -s "${AUTH[@]}" --max-time 2 "$IMDS/meta-data/placement/availability-zone" 2>/dev/null || echo '?')"
     echo "  ec2       : $IID  ($ITYPE, $IAZ)"
 else
+    # Clear it, don't just decline to print it — the results banner interpolates
+    # $IID later and would otherwise echo the proxy's error body as an instance id.
+    IID=""
     echo "  ec2       : instance metadata unavailable (not on EC2, or IMDS blocked)"
 fi
 echo "  repo      : $REPO"
@@ -101,22 +104,40 @@ bold "[2/5] Dependencies"
 VENV="${VENV_DIR:-.venv}"
 PY=""
 
-# Judge the venv by whether it actually works, not by the exit code of `venv`.
-# A run that dies partway through ensurepip leaves a directory behind that looks
-# plausible and makes the *next* `python -m venv` return 0 without ever producing
-# an activate script — so probe for a usable pip instead.
-venv_usable() { [ -x "$VENV/bin/python" ] && [ -f "$VENV/bin/activate" ] &&
-                "$VENV/bin/python" -m pip --version >/dev/null 2>&1; }
+# Judge the venv by whether it actually works *and* is new enough — not by the
+# exit code of `venv`. Two ways that bites:
+#   * A run that dies partway through ensurepip leaves a directory behind that
+#     looks plausible and makes the next `python -m venv` return 0 without ever
+#     producing an activate script.
+#   * `python -m venv` on an existing directory is a no-op unless --clear is
+#     passed. A stale .venv built by the system Python 3.9 is therefore reused
+#     silently, and pip then resolves scikit-learn *backwards* to a version that
+#     still supports 3.9 instead of failing. That is the exact mismatch this
+#     script exists to prevent, so the version is asserted here.
+venv_version() {
+    [ -x "$VENV/bin/python" ] || return 1
+    "$VENV/bin/python" -c 'import sys; print("%d%02d" % sys.version_info[:2])' 2>/dev/null
+}
+venv_usable() {
+    local v
+    [ -f "$VENV/bin/activate" ] || return 1
+    "$VENV/bin/python" -m pip --version >/dev/null 2>&1 || return 1
+    v="$(venv_version)" || return 1
+    [ -n "$v" ] && [ "$v" -ge 310 ] 2>/dev/null
+}
 
 if ! venv_usable; then
     if [ -e "$VENV" ]; then
-        echo "  venv      : removing unusable $VENV"
-        # Non-fatal: on a read-only or root-owned path this fails, and the
-        # venv_usable re-check below then routes us to the --user fallback
+        stale="$("$VENV/bin/python" --version 2>&1 || echo 'unusable')"
+        echo "  venv      : discarding existing $VENV ($stale)"
+        # Non-fatal: on a read-only or root-owned path this fails, and --clear
+        # below plus the venv_usable re-check route us to the --user fallback
         # rather than leaving the run wedged.
         rm -rf "$VENV" 2>/dev/null || true
     fi
-    "$PYBIN" -m venv "$VENV" >/tmp/venv.log 2>&1 || true
+    # --clear is the load-bearing flag: without it, venv silently skips an
+    # existing directory and we would re-adopt the stale interpreter.
+    "$PYBIN" -m venv --clear "$VENV" >/tmp/venv.log 2>&1 || true
 fi
 
 if venv_usable; then
@@ -136,24 +157,62 @@ else
     export PIP_USER=1
 fi
 echo "  python    : $($PY --version 2>&1)"
+
+# Last line of defence before pip runs. If we somehow ended up on an old
+# interpreter anyway, stop here — pip would otherwise "succeed" by installing
+# older libraries than requirements.txt pins.
+ACTIVE="$($PY -c 'import sys; print("%d%02d" % sys.version_info[:2])' 2>/dev/null || echo 0)"
+[ "$ACTIVE" -ge 310 ] 2>/dev/null || die "active interpreter is $($PY --version 2>&1), need >= 3.10.
+Remove the stale environment and re-run:
+    rm -rf ${VENV} && bash scripts/lab_run.sh"
+
 $PY -m pip install -q --upgrade pip >/dev/null 2>&1 || true
 $PY -m pip install -q -r requirements.txt || die "pip install failed.
 
 If pip itself is missing for this interpreter:
     sudo dnf install -y ${PYBIN}-pip        # Rocky / RHEL 9
     sudo apt install -y ${PYBIN}-venv       # Debian / Ubuntu"
-$PY - <<'PY'
-import importlib, sys
-mods = ["sklearn", "pandas", "numpy", "joblib", "matplotlib", "seaborn", "streamlit"]
-for m in mods:
+
+# Compare what actually landed against what requirements.txt pins. pip can
+# resolve backwards for all sorts of reasons (old interpreter, no wheel for the
+# platform, a local constraints file); a silent downgrade here produces joblib
+# artifacts the deployed app cannot load correctly, so make it fatal.
+$PY - <<'PY' || die "installed versions do not match requirements.txt — see above"
+import importlib, re, sys
+from importlib.metadata import version, PackageNotFoundError
+
+IMPORT_NAME = {"scikit-learn": "sklearn"}
+pins = {}
+for line in open("requirements.txt", encoding="utf-8"):
+    line = line.split("#")[0].strip()
+    m = re.fullmatch(r"([A-Za-z0-9_.\-]+)==([\w.]+)", line)
+    if m:
+        pins[m.group(1)] = m.group(2)
+
+bad = []
+for dist, pinned in sorted(pins.items()):
     try:
-        v = getattr(importlib.import_module(m), "__version__", "?")
-        print(f"  {m:<12} {v}")
-    except ImportError:
-        print(f"  {m:<12} MISSING")
-        sys.exit(1)
+        got = version(dist)
+    except PackageNotFoundError:
+        print(f"  {dist:<14} MISSING (pinned {pinned})")
+        bad.append(dist)
+        continue
+    flag = "" if got == pinned else f"   <-- MISMATCH, pinned {pinned}"
+    if got != pinned:
+        bad.append(dist)
+    print(f"  {dist:<14} {got}{flag}")
+
+# Import check is separate: a package can be installed yet fail to import, e.g.
+# a numpy/scikit-learn ABI mismatch after a partial upgrade.
+for mod in ["sklearn", "pandas", "numpy", "joblib", "matplotlib", "seaborn", "streamlit"]:
+    try:
+        importlib.import_module(mod)
+    except Exception as exc:
+        print(f"  import {mod} FAILED: {type(exc).__name__}: {exc}")
+        bad.append(mod)
+
+sys.exit(1 if bad else 0)
 PY
-[ $? -eq 0 ] || die "a required package is missing"
 echo
 
 # --------------------------------------------------------------------------- #
@@ -216,7 +275,11 @@ $PY scripts/verify.py || die "verification failed — do not submit these artifa
 echo
 
 rule
-bold " RESULTS — trained on $(hostname)"
+# Repeat the machine identity here, not just in section 1. By this point the
+# environment block has scrolled off on any normal terminal, and the mark is for
+# evidence — so the proof and the result need to be capturable in one frame.
+bold " RESULTS — trained on $(hostname)${IID:+  [EC2 $IID]}"
+echo " $(date -u '+%Y-%m-%d %H:%M UTC') · $($PY --version 2>&1) · scikit-learn $($PY -c 'import sklearn;print(sklearn.__version__)' 2>/dev/null)"
 rule
 $PY - <<'PY'
 import pandas as pd
