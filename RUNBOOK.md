@@ -186,8 +186,40 @@ drop to `n_estimators=150` or add `max_depth`, and retrain.
 
 1. https://streamlit.io/cloud → sign in with GitHub
 2. **New App** → your repo → branch `main` → main file `app.py`
-3. **Advanced settings** → set the Python version to match `runtime.txt`
-4. Deploy, then watch the build log to the end
+3. **Advanced settings** → set **Python 3.12** from the dropdown. Do this every
+   time; see the warning below.
+4. **Custom subdomain** → set one (e.g. `badhu-ml-assignment2`). The auto-generated
+   URL contains a random hash that changes if you ever redeploy, which would
+   invalidate the link already printed in the README and the submission PDF.
+5. Deploy, then watch the build log to the end
+
+### ⚠️ `runtime.txt` is currently ignored by Community Cloud
+
+Community Cloud now installs with `uv`, and there is an open bug where the
+platform forces a recent Python (3.13/3.14) regardless of `runtime.txt`. The log
+line to look for is:
+
+```
+Using uv pip install.
+Using Python 3.14.7 environment at /home/adminuser/venv
+Resolved 53 packages in 531ms          <-- then it appears to hang
+```
+
+It is not hanging. numpy 2.2.6, pandas 2.3.3 and scikit-learn 1.7.2 have no
+prebuilt wheels for 3.14, so uv is compiling them from source — twenty-plus
+minutes, usually ending in a compiler error.
+
+**The Python version cannot be changed after an app is created.** You must delete
+the app and redeploy, selecting 3.12 in *Advanced settings*. The dropdown is
+honoured; only `runtime.txt` is ignored. A `.python-version` file (read by `uv`)
+is committed as a second line of defence, but do not rely on it alone.
+
+If 3.12 is ever unavailable, the fallback is to retrain so the artifacts match a
+Python the platform will give you — never to loosen the pins while keeping old
+artifacts, which reintroduces the version-mismatch failure.
+
+Refs: [streamlit#15326](https://github.com/streamlit/streamlit/issues/15326),
+[upgrade-python docs](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app/upgrade-python)
 
 Failure modes, in order of likelihood:
 
