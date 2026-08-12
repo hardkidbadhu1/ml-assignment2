@@ -237,7 +237,7 @@ with tab_matrix:
                 output_dict=True,
                 zero_division=0,
             )
-            st.dataframe(pd.DataFrame(report).T.round(4), width="stretch")
+            st.dataframe(pd.DataFrame(report).T.round(4), use_container_width=True)
     else:
         st.info("Confusion matrix requires ground-truth labels.")
 
@@ -259,7 +259,7 @@ with tab_compare:
             styled = comparison.style.format("{:.4f}").highlight_max(axis=0, color="#c8e6c9")
         except (ImportError, AttributeError):
             styled = comparison.round(4)
-        st.dataframe(styled, width="stretch")
+        st.dataframe(styled, use_container_width=True)
         metric_choice = st.selectbox("Chart metric", METRIC_ORDER, index=METRIC_ORDER.index("MCC"))
         st.bar_chart(comparison[metric_choice])
         st.download_button(
@@ -281,7 +281,7 @@ with tab_preds:
     if has_labels:
         out["correct"] = out["prediction"].astype(str) == out[target].astype(str)
         st.caption(f"{int(out['correct'].sum()):,} of {len(out):,} correct.")
-    st.dataframe(out.head(200), width="stretch")
+    st.dataframe(out.head(200), use_container_width=True)
     st.download_button(
         "Download predictions as CSV",
         out.to_csv(index=False).encode(),
@@ -291,9 +291,9 @@ with tab_preds:
 
 with tab_data:
     st.subheader("Uploaded data")
-    st.dataframe(df.head(100), width="stretch")
+    st.dataframe(df.head(100), use_container_width=True)
     st.write("Numeric summary")
-    st.dataframe(df.describe().T.round(3), width="stretch")
+    st.dataframe(df.describe().T.round(3), use_container_width=True)
     if has_labels:
         st.write("Class distribution")
         st.bar_chart(df[target].astype(str).value_counts())

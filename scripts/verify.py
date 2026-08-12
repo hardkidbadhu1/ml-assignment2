@@ -164,5 +164,41 @@ check("no single artifact over 50 MB", all(
 ))
 check("all artifacts together under 100 MB", total < 100, f"{total:.1f} MB")
 
+# --------------------------------------------------------------------------- #
+print("\n6. Streamlit app renders under the pinned streamlit")
+# --------------------------------------------------------------------------- #
+# Loading the artifacts is necessary but not sufficient — the app also has to
+# survive the Streamlit *API* version that requirements.txt pins. This caught a
+# real one: `st.dataframe(..., width="stretch")` is valid from Streamlit 1.49 but
+# raises TypeError on the pinned 1.41.1, which would have booted fine and then
+# crashed the moment a grader opened the confusion-matrix tab.
+try:
+    import streamlit as st
+    from streamlit.testing.v1 import AppTest
+
+    print(f"    streamlit {st.__version__} (requirements.txt pin)")
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=300).run()
+    check("app.py executes with no uncaught exception", not at.exception,
+          "; ".join(str(e.value) for e in at.exception) if at.exception else "")
+    check("all six metrics render", len({m.label for m in at.metric}) == 6,
+          f"{sorted({m.label for m in at.metric})}")
+    check("five tabs render", len(at.tabs) == 5, f"{len(at.tabs)}")
+
+    # Switching model re-runs the whole script, so a per-model failure (an
+    # estimator without predict_proba, say) only shows up on selection.
+    picker = next((s for s in at.selectbox if "kNN" in s.options), None)
+    if picker is None:
+        check("model dropdown present", False)
+    else:
+        check(f"dropdown lists all {len(metadata['artifacts'])} models",
+              len(picker.options) == len(metadata["artifacts"]))
+        for name in picker.options:
+            run = AppTest.from_file(str(ROOT / "app.py"), default_timeout=300).run()
+            next(s for s in run.selectbox if name in s.options).select(name).run()
+            check(f"select '{name}'", not run.exception,
+                  "; ".join(str(e.value) for e in run.exception) if run.exception else "")
+except ImportError as exc:
+    print(f"  [SKIP] streamlit not importable ({exc}) — install requirements.txt to run this check")
+
 print(f"\n{'ALL CHECKS PASSED' if not failures else f'{len(failures)} FAILED: {failures}'}")
 sys.exit(1 if failures else 0)

@@ -147,7 +147,7 @@ project-folder/
 ```bash
 pip install -r requirements.txt
 bash scripts/train_fifa.sh     # ~25 s
-python scripts/verify.py       # 18 checks; exits non-zero on failure
+python scripts/verify.py       # 28 checks; exits non-zero on failure
 streamlit run app.py
 
 # Submission PDF (build-time deps only; see the note below)
@@ -197,9 +197,15 @@ algorithm and nothing else.
 Held-out test set (3,813 rows, 312 players never seen in training). Precision /
 Recall / F1 are **macro**-averaged, AUC is **one-vs-rest macro**.
 
+> Produced on the BITS Virtual Lab VM (Rocky Linux 9.5, Python 3.12.7,
+> scikit-learn 1.7.2) — the same run as the submitted screenshot, and the same
+> artifacts committed under `model/artifacts/`. Fit times are from that 8-vCPU
+> instance; the metrics themselves reproduce exactly on other hardware, since
+> every model is seeded with `random_state=42`.
+
 | ML Model Name | Accuracy | AUC | Precision | Recall | F1 | MCC |
 |---|---|---|---|---|---|---|
-| Logistic Regression | **0.9580** | **0.9972** | **0.9605** | **0.9573** | **0.9588** | **0.9416** |
+| Logistic Regression | **0.9580** | **0.9972** | **0.9608** | **0.9573** | **0.9589** | **0.9416** |
 | Decision Tree | 0.8985 | 0.9602 | 0.9041 | 0.8973 | 0.9002 | 0.8587 |
 | kNN | 0.8893 | 0.9829 | 0.9001 | 0.8839 | 0.8911 | 0.8457 |
 | Naive Bayes (Gaussian) | 0.7060 | 0.9465 | 0.7197 | 0.7713 | 0.7011 | 0.6310 |
@@ -212,24 +218,24 @@ Recall / F1 are **macro**-averaged, AUC is **one-vs-rest macro**.
 
 | Model | Train Acc | Test Acc | Gap | CV Acc (mean ± sd) | Fit time (s) |
 |---|---|---|---|---|---|
-| Logistic Regression | 0.9618 | 0.9580 | **0.004** | 0.9551 ± 0.0064 | 0.18 |
-| Decision Tree | 0.9634 | 0.8985 | **0.065** | 0.8999 ± 0.0021 | 0.13 |
-| kNN | 1.0000 | 0.8893 | **0.111** | 0.8866 ± 0.0101 | 0.04 |
-| Naive Bayes (Gaussian) | 0.7293 | 0.7060 | 0.023 | 0.7274 ± 0.0159 | 0.04 |
-| Random Forest (Ensemble) | 0.9790 | 0.9441 | **0.035** | 0.9445 ± 0.0064 | 1.33 |
-| SVM (RBF) | 0.9631 | 0.9533 | 0.010 | 0.9518 ± 0.0075 | 3.15 |
+| Logistic Regression | 0.9621 | 0.9580 | **0.004** | 0.9551 ± 0.0066 | 1.44 |
+| Decision Tree | 0.9634 | 0.8985 | **0.065** | 0.8999 ± 0.0021 | 0.46 |
+| kNN | 1.0000 | 0.8893 | **0.111** | 0.8866 ± 0.0101 | 0.20 |
+| Naive Bayes (Gaussian) | 0.7293 | 0.7060 | 0.023 | 0.7274 ± 0.0159 | 0.19 |
+| Random Forest (Ensemble) | 0.9790 | 0.9441 | **0.035** | 0.9445 ± 0.0064 | 3.69 |
+| SVM (RBF) | 0.9631 | 0.9533 | 0.010 | 0.9518 ± 0.0075 | 15.72 |
 
 ### Observations
 
 | ML Model Name | Observation about model performance |
 |---|---|
-| Logistic Regression | Best model on every one of the six metrics, and it is the *simplest* one — which is the finding, not an accident. The engineered composite columns (`offensive_contribution`, `defensive_contribution`, `creativity_score`) are close to linear discriminants for role, so the four classes are very nearly linearly separable in this feature space and a hyperplane is the right hypothesis class. Train–test gap of 0.004 with CV sd 0.0064 means it is not overfitting and has capacity to spare. Its 0.4-point lead over the RBF SVM is within about one CV standard deviation, so "logistic regression and SVM are tied at the top, ahead of the forest" is the honest reading. |
+| Logistic Regression | Best model on every one of the six metrics, and it is the *simplest* one — which is the finding, not an accident. The engineered composite columns (`offensive_contribution`, `defensive_contribution`, `creativity_score`) are close to linear discriminants for role, so the four classes are very nearly linearly separable in this feature space and a hyperplane is the right hypothesis class. Train–test gap of 0.004 with CV sd 0.0066 means it is not overfitting and has capacity to spare. Its 0.5-point lead over the RBF SVM is around 0.7 of a CV standard deviation, so "logistic regression and SVM are tied at the top, ahead of the forest" is the honest reading. |
 | Decision Tree | Trains to 0.9634 and tests at 0.8985 — a 0.065 gap that is pure variance. A single tree partitions with axis-parallel cuts, so it approximates a diagonal boundary with a staircase and burns depth doing it; `min_samples_leaf=5` bounds this but does not remove it. Notably its CV sd is the *lowest* in the table (0.0021) — it is consistently mediocre, not erratic, so the gap is bias-toward-the-training-set rather than fold sensitivity. |
 | kNN | Train accuracy is exactly 1.0000, which is the `weights="distance"` giveaway: a training point sits at distance 0 from itself and takes infinite weight, so the model reproduces the training set by construction. Real generalisation is 0.8893 — the largest gap in the table (0.111). With 48 scaled numeric dimensions, Euclidean distance is already thinning out (concentration of distances), so a fixed *k* averages over neighbours that are not especially near. It is also the model that most depends on the `StandardScaler`: without it, `market_value`-scale columns would dominate the metric outright. |
-| Naive Bayes (Gaussian) | Clear worst on accuracy (0.7060) yet holds an AUC of 0.9465 — the class *ranking* is good and the *calibration* is bad. That signature is exactly what violated conditional independence produces: `offensive_contribution`, `creativity_score`, `possession_impact` and the underlying pass/shot counts are strongly correlated, so NB multiplies what is effectively the same evidence several times and drives posteriors to overconfident extremes, mislabelling near the boundaries while keeping the ordering roughly right. Recall (0.7713) exceeding precision (0.7197) says it over-predicts the broad classes. Fastest to fit at 0.04 s — the accuracy cost is not worth it here, but the AUC shows the features themselves are informative. |
+| Naive Bayes (Gaussian) | Clear worst on accuracy (0.7060) yet holds an AUC of 0.9465 — the class *ranking* is good and the *calibration* is bad. That signature is exactly what violated conditional independence produces: `offensive_contribution`, `creativity_score`, `possession_impact` and the underlying pass/shot counts are strongly correlated, so NB multiplies what is effectively the same evidence several times and drives posteriors to overconfident extremes, mislabelling near the boundaries while keeping the ordering roughly right. Recall (0.7713) exceeding precision (0.7197) says it over-predicts the broad classes. Fastest to fit in the table at 0.19 s — the accuracy cost is not worth it here, but the AUC shows the features themselves are informative. |
 | Random Forest (Ensemble) | Bagging does what it says: against the single tree, train accuracy rises 0.9634 → 0.9790 while the train–test gap *halves*, 0.065 → 0.035, and test accuracy climbs 0.8985 → 0.9441. Averaging 200 decorrelated trees cancels the variance of any one of them. It still trails logistic regression, which is the useful negative result — the ensemble's extra capacity is spent modelling a boundary that was close to linear to begin with, so there was nothing there to buy. |
-| SVM (RBF) | Statistically tied with logistic regression (0.9533 vs 0.9580, ~1 CV sd apart) at roughly 17× the fit cost, 3.15 s vs 0.18 s. That near-equality is itself the evidence: if the RBF kernel's non-linear boundary bought real separation, it would show as a clear win. It does not, which independently confirms the linear-separability read. Slowest model in the table — `probability=True` adds an internal 5-fold Platt calibration on top of an already superlinear fit. |
-| **Overall Winner for your dataset?** | **Logistic Regression**, selected on **MCC (0.9416)**. With a 4-class split running from 34.6% to 11.5%, plain accuracy is dominated by Defender and Midfielder and would let a model that ignores Goalkeepers look respectable; MCC accounts for every cell of the 4×4 confusion matrix and does not reward that. Logistic regression happens to top all six metrics, so the choice is not contested here — but it also wins on the criteria that matter operationally: it is the cheapest to fit, the smallest artifact (11 KB against the forest's 19 MB), and the only model whose coefficients can be read directly as "which behaviours mark a Defender". |
+| SVM (RBF) | Statistically tied with logistic regression (0.9533 vs 0.9580, under 1 CV sd apart) at roughly 11× the fit cost, 15.72 s vs 1.44 s. That near-equality is itself the evidence: if the RBF kernel's non-linear boundary bought real separation, it would show as a clear win. It does not, which independently confirms the linear-separability read. Slowest model in the table — `probability=True` adds an internal 5-fold Platt calibration on top of an already superlinear fit. |
+| **Overall Winner for your dataset?** | **Logistic Regression**, selected on **MCC (0.9416)**. With a 4-class split running from 34.6% to 11.5%, plain accuracy is dominated by Defender and Midfielder and would let a model that ignores Goalkeepers look respectable; MCC accounts for every cell of the 4×4 confusion matrix and does not reward that. Logistic regression happens to top all six metrics, so the choice is not contested here — but it also wins on the criteria that matter operationally: it fits ~11× faster than the SVM it is tied with, produces the smallest artifact (11 KB against the forest's 19 MB), and is the only model whose coefficients can be read directly as "which behaviours mark a Defender". |
 
 ---
 
@@ -247,7 +253,7 @@ Recall / F1 are **macro**-averaged, AUC is **one-vs-rest macro**.
 
 ## Verification
 
-`scripts/verify.py` runs 18 checks and exits non-zero on any failure:
+`scripts/verify.py` runs 28 checks and exits non-zero on any failure:
 
 - **Leakage** — train and test player sets are disjoint (936 / 312, 0 shared) and
   together account for all 1,248 players; the grouping column is not a feature;
@@ -259,11 +265,24 @@ Recall / F1 are **macro**-averaged, AUC is **one-vs-rest macro**.
 - **Deployability** — no artifact over 50 MB (GitHub's warning threshold), 25.9 MB
   total.
 
-The Streamlit app is additionally smoke-tested through `streamlit.testing.v1.AppTest`,
-which caught a real deploy-breaking bug: `pandas.DataFrame.style` is an optional
-accessor gated on `jinja2`, which Streamlit does not pull in transitively. It is
-now pinned, and the call site degrades to an unstyled table instead of taking down
-the tab.
+- **App rendering** — `streamlit.testing.v1.AppTest` executes `app.py` against the
+  *pinned* Streamlit and selects each of the six models in turn.
+
+That last group caught two deploy-breaking bugs that artifact-loading tests alone
+would have missed, because both are Streamlit-API issues rather than model issues:
+
+1. `pandas.DataFrame.style` is an optional accessor gated on `jinja2`, which
+   Streamlit does not pull in transitively. Now pinned, and the call site degrades
+   to an unstyled table rather than taking down the tab.
+2. `st.dataframe(..., width="stretch")` is valid from Streamlit 1.49 but raises
+   `TypeError: 'str' object cannot be interpreted as an integer` on the pinned
+   1.41.1. The app would have booted cleanly and then crashed the instant a
+   grader opened the *Confusion matrix* tab. Replaced with
+   `use_container_width=True`, which is the correct API for the pinned version.
+
+The general lesson: pinning a dependency and then writing code against a *newer*
+version of its API fails at runtime, not at install time, so the check has to
+actually execute the app under the pin.
 
 ---
 
