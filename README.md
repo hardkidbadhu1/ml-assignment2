@@ -116,8 +116,8 @@ the assignment minimum after the cut.
 
 ## c. GitHub repository link
 
-- **Repository:** `<https://github.com/<user>/<repo>>`
-- **Live Streamlit app:** `<https://<app>.streamlit.app>`
+- **Repository:** <https://github.com/hardkidbadhu1/ml-assignment2>
+- **Live Streamlit app:** <https://ml-assignment2-hz3fqukkxpqqctdhwfbxng.streamlit.app/>
 
 ```
 project-folder/
