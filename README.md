@@ -117,7 +117,7 @@ the assignment minimum after the cut.
 ## c. GitHub repository link
 
 - **Repository:** <https://github.com/hardkidbadhu1/ml-assignment2>
-- **Live Streamlit app:** <https://ml-assignment2-hz3fqukkxpqqctdhwfbxng.streamlit.app/>
+- **Live Streamlit app:** <https://badhu-ml-assignment2.streamlit.app/>
 
 ```
 project-folder/
