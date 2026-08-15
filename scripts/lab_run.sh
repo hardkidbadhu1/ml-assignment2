@@ -291,8 +291,3 @@ best = df["MCC"].idxmax()
 print(f"Best by MCC: {best}  (MCC={df.loc[best, 'MCC']:.4f}, Accuracy={df.loc[best, 'Accuracy']:.4f})")
 PY
 rule
-bold " SCREENSHOT THIS WINDOW"
-echo " It shows the hostname and EC2 instance id above, the six models with all"
-echo " six metrics, and every verification check passing — the evidence and the"
-echo " result in one frame. Scroll up if the environment block is off-screen."
-rule

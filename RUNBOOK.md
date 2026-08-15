@@ -243,6 +243,50 @@ because my browser is logged in."
 3. BITS Virtual Lab screenshot
 4. The full README content
 
+`scripts/make_pdf.py` builds all four in one render — no manual merging, one set
+of page numbers, and the order cannot come out wrong:
+
+Screenshots live in two folders, one per section of the report:
+
+```bash
+screenshots/lab/    one frame from the end of scripts/lab_run.sh
+screenshots/app/    one capture per tab of the deployed Streamlit app
+```
+
+Then:
+
+```bash
+cp ~/Desktop/lab-run.png  screenshots/lab/01-lab-run.png
+cp ~/Desktop/metrics.png  screenshots/app/01-metrics.png
+pip install -r requirements-dev.txt      # weasyprint and markdown, build-time only
+python scripts/make_pdf.py
+```
+
+It prints exactly what went into each section, so you can confirm before
+submitting:
+
+```
+  1. GitHub repository    https://github.com/hardkidbadhu1/ml-assignment2
+  2. Live Streamlit app   https://badhu-ml-assignment2.streamlit.app/
+  3. Lab evidence         1 image(s): 01-lab-run.png
+  4. App screenshots      5 image(s): 01-metrics.png, ...
+  5. Report body from README.md
+```
+
+Notes:
+
+- The two links are **parsed out of README section c** rather than restated in
+  the script, so the cover page cannot disagree with the body. This matters:
+  the app URL already changed once.
+- Images are embedded in **filename order**, so prefix them `01-`, `02-` to
+  control the sequence. Captions are derived from the filename, with the numeric
+  prefix stripped, so `02-confusion-matrix.png` prints as
+  *Figure 2. Confusion matrix*.
+- It **refuses to build** if either folder is empty, because a PDF missing the
+  evidence looks complete while quietly dropping marks. Use
+  `--allow-missing-screenshots` to override, or `--readme-only` for just the
+  body with no cover or figures.
+
 Final checks:
 
 - [ ] Repo link opens for a logged-out visitor (repo is **public**)
